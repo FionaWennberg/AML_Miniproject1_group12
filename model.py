@@ -9,7 +9,8 @@ from os.path import join
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report, roc_auc_score
 from data import load_data
-    
+
+
 X_train, X_test, y_train, y_test = load_data("egg_data_assignment_2")
 
 model = RandomForestClassifier(
