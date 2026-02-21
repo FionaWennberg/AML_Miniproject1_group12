@@ -11,7 +11,7 @@ from sklearn.metrics import classification_report, roc_auc_score
 from data import load_data
 
 
-X_train, X_test, y_train, y_test = load_data("egg_data_assignment_2")
+X_train, X_test, y_train, y_test = load_data("egg_data_assignment_2", target_len=10_000)
 
 model = RandomForestClassifier(
     n_estimators=200,
