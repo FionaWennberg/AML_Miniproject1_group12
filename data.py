@@ -1,73 +1,78 @@
-# import os
-# import numpy as np
-# from os.path import join
-# import pandas as pd
-# from sklearn.discriminant_analysis import StandardScaler
-# from sklearn.model_selection import train_test_split
-# from tqdm.auto import tqdm
-
-
-# #getting data
-# def load_data(path_data):
-    
-#     data_oa = []
-#     data_oc = []
-
-#     for folder in tqdm(os.listdir(path_data), desc="Loading data"):
-#         for filename in os.listdir(join(path_data, folder)):
-#             df = pd.read_csv(join(path_data, folder, filename), sep=",", index_col=0)
-#             if "oa" in filename:
-#                 data_oa.append(np.array(df))
-#             else:
-#                 data_oc.append(np.array(df))
-
-#     X = np.vstack([data_oa, data_oc])  
-
-#     y = np.concatenate([
-#     np.zeros(len(data_oa[0]), dtype=int),
-#     np.ones(len(data_oc[0]), dtype=int)])
-    
-#     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-#     scaler = StandardScaler()
-#     X_train = scaler.fit_transform(X_train)
-#     X_test = scaler.transform(X_test)
-
-#     return X_train, X_test, y_train, y_test
-
 import os
 import numpy as np
 import pandas as pd
 from os.path import join
-from sklearn.model_selection import train_test_split
 import scipy.signal as signal
 
 
-def reref_and_downsample(eeg, target_len=10_000):
-    # eeg shape: (20, T)
-    eeg_ds = signal.resample(eeg, target_len, axis=1)   # (20, target_len)
-    ref = eeg_ds.mean(axis=0)                           # (target_len,)
-    return eeg_ds - ref                                 # (20, target_len)
+def set_reference_and_downsample(eeg_data, ref_channels, sample_rate=50, sample_rate_original=250):
+    """
+    eeg_data: (20, T_original)
+    Downsample from sample_rate_original -> sample_rate, and re-reference by common average over ref_channels.
+    Returns: (len(ref_channels), T_down)
+    """
+    eeg_masked = eeg_data[ref_channels]  # (20, T)
+
+    # T_down = T_original / (250/50) = T_original / 5
+    factor = sample_rate_original // sample_rate
+    eeg_down = signal.resample(eeg_masked, eeg_masked.shape[1] // factor, axis=1)
+
+    ref_signal = eeg_down.mean(axis=0)           # (T_down,)
+    eeg_reref = eeg_down - ref_signal            # (20, T_down)
+    return eeg_reref
 
 
-def load_data(path_data, test_size=0.2, random_state=42, target_len=10_000):
-    X = []
-    y = []
+def load_data(path_data, sample_rate=50, sample_rate_original=250):
+    data_oa_original = []
+    data_oc_original = []
+    groups_oa = []
+    groups_oc = []
 
-    for folder in os.listdir(path_data):
-        for filename in os.listdir(join(path_data, folder)):
-            if not filename.endswith(".csv"):
+    # Treat each folder as one patient (8 folders -> 8 patient IDs)
+    patient_folders = sorted([f for f in os.listdir(path_data) if os.path.isdir(join(path_data, f))])
+
+    for pid, folder in enumerate(patient_folders):
+        folder_path = join(path_data, folder)
+
+        for filename in os.listdir(folder_path):
+            if not filename.lower().endswith(".csv"):
                 continue
 
-            df = pd.read_csv(join(path_data, folder, filename), index_col=0)
-            eeg = df.values                              # (20, 50000) typically
+            df = pd.read_csv(join(folder_path, filename), sep=",", index_col=0)
+            arr = df.values  # expected (20, 50000)
 
-            eeg = reref_and_downsample(eeg, target_len)   # (20, 10000)
-            X.append(eeg.reshape(-1))                     # (20*10000,)
+            if "oa" in filename.lower():
+                data_oa_original.append(arr)
+                groups_oa.append(pid)
+            else:
+                data_oc_original.append(arr)
+                groups_oc.append(pid)
 
-            y.append(0 if "oa" in filename.lower() else 1)
+    # Preprocess (downsample + reref)
+    data_oa = []
+    data_oc = []
+    for i in range(len(data_oa_original)):
+        data_oa.append(set_reference_and_downsample(
+            data_oa_original[i], np.arange(20),
+            sample_rate=sample_rate, sample_rate_original=sample_rate_original
+        ))
+    for i in range(len(data_oc_original)):
+        data_oc.append(set_reference_and_downsample(
+            data_oc_original[i], np.arange(20),
+            sample_rate=sample_rate, sample_rate_original=sample_rate_original
+        ))
 
-    X = np.array(X)
-    y = np.array(y)
+    # Flatten each recording to 1D feature vector for sklearn: (20, 10000) -> (200000,)
+    X_oa = np.array([x.reshape(-1) for x in data_oa])
+    X_oc = np.array([x.reshape(-1) for x in data_oc])
 
-    return train_test_split(X, y, test_size=test_size, random_state=random_state, stratify=y)
+    # Build full dataset
+    X = np.vstack([X_oa, X_oc])
+    y = np.concatenate([
+        np.zeros(len(X_oa), dtype=int),
+        np.ones(len(X_oc), dtype=int),
+    ])
+
+    groups = np.array(groups_oa + groups_oc, dtype=int)  # patient ID per sample
+
+    return X, y, groups
