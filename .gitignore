@@ -1,3 +1,7 @@
 # ignore data
 egg_data_assignment_2/
 
+# ignore pycache
+__pycache__/
+*.pyc
+
