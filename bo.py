@@ -9,7 +9,7 @@ from sklearn.metrics import roc_auc_score
 
 def run_bo_rf(X, y, groups, n_calls=19, random_state=42):
     # start at same initial point (your style)
-    x0 = [50, 25, "sqrt", "gini"]
+    x0 = [50, 25, "sqrt", "gini"] # [n_estimators, max_depth, max_features, criterion]
     if x0[2] is None:
         x0[2] = "None"
 
