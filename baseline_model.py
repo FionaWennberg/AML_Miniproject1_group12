@@ -20,7 +20,8 @@ def random_search_rf_baseline(X, y, groups, n_iters=19, random_state=42):
     for i in range(n_iters):
         # sample random hyperparameters (uniform)
         n_estimators = int(rng.integers(n_estimators_range[0], n_estimators_range[1] + 1))
-        max_depth = int(rng.integers(max_depth_range[0], max_depth_range[1] + 1))
+        max_depth_choices = list(range(1, 101)) + [None]
+        max_depth = rng.choice(max_depth_choices)
         max_features = rng.choice(max_features_choices)
         criterion = rng.choice(criterion_choices)
 

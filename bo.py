@@ -66,7 +66,7 @@ def run_bo_rf(X, y, groups, n_calls=19, random_state=42):
     opt = gp_minimize(
         objective_function,
         [n_estimators, max_depth, max_features, criterion],
-        acq_func="EI",
+        acq_func="LCB",
         n_initial_points=0,     # keep your setting: only x0 as the initial point
         n_calls=n_calls,
         x0=[x0],
